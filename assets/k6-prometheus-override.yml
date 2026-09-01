@@ -1,0 +1,14 @@
+# mcpgw-k6: local compose override, installed by the mcpgw-k6-* commands.
+# Adds --web.enable-remote-write-receiver so k6 can stream its metrics into
+# the stack's Prometheus. Compose `command` lists replace (not merge), so the
+# upstream flags are repeated verbatim from docker-compose.prebuilt.yml.
+services:
+  prometheus:
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+      - '--web.enable-remote-write-receiver'

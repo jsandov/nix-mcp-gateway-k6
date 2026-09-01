@@ -1,0 +1,316 @@
+{
+  "uid": "mcpgw-exec-load",
+  "title": "MCP Gateway · Load & Reliability",
+  "tags": ["k6", "mcp-gateway", "load-test"],
+  "timezone": "browser",
+  "editable": true,
+  "schemaVersion": 39,
+  "refresh": "10s",
+  "time": { "from": "now-30m", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "DS_PROM",
+        "type": "datasource",
+        "query": "prometheus",
+        "hide": 2,
+        "current": {}
+      },
+      {
+        "name": "testid",
+        "label": "Test run",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "${DS_PROM}" },
+        "query": { "query": "label_values(k6_http_reqs_total, testid)", "refId": "testid" },
+        "refresh": 2,
+        "sort": 4,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": { "text": "All", "value": "$__all" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Availability",
+      "description": "Share of all requests that succeeded during the selected window. The number execs compare against the SLO.",
+      "gridPos": { "h": 5, "w": 5, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROM}" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * (1 - (sum(rate(k6_http_reqs_total{expected_response=\"false\",testid=~\"$testid\"}[$__rate_interval])) or vector(0)) / sum(rate(k6_http_reqs_total{testid=~\"$testid\"}[$__rate_interval])))"
+        }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 2,
+          "min": 90,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "#EAB839", "value": 99 },
+              { "color": "green", "value": 99.9 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Throughput",
+      "description": "Requests per second the gateway is handling.",
+      "gridPos": { "h": 5, "w": 5, "x": 5, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROM}" },
+      "targets": [
+        { "refId": "A", "expr": "sum(rate(k6_http_reqs_total{testid=~\"$testid\"}[$__rate_interval]))" }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "none", "graphMode": "area" },
+      "fieldConfig": { "defaults": { "unit": "reqps", "decimals": 1 }, "overrides": [] }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Response time · p95",
+      "description": "95% of requests complete within this time.",
+      "gridPos": { "h": 5, "w": 5, "x": 10, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROM}" },
+      "targets": [
+        { "refId": "A", "expr": "max(k6_http_req_duration_p95{testid=~\"$testid\"})" }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "#EAB839", "value": 0.5 },
+              { "color": "red", "value": 1.5 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Error rate",
+      "description": "Failed requests as a share of all requests.",
+      "gridPos": { "h": 5, "w": 4, "x": 15, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROM}" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * (sum(rate(k6_http_reqs_total{expected_response=\"false\",testid=~\"$testid\"}[$__rate_interval])) or vector(0)) / sum(rate(k6_http_reqs_total{testid=~\"$testid\"}[$__rate_interval]))"
+        }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "#EAB839", "value": 0.5 },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Concurrent users",
+      "description": "Simulated concurrent users (k6 virtual users) currently applying load.",
+      "gridPos": { "h": 5, "w": 5, "x": 19, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROM}" },
+      "targets": [
+        { "refId": "A", "expr": "sum(k6_vus{testid=~\"$testid\"})" }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "none", "graphMode": "area" },
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0 }, "overrides": [] }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Traffic by user journey",
+      "description": "Requests per second, split by what users and agents are doing.",
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 5 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROM}" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (scenario) (rate(k6_http_reqs_total{testid=~\"$testid\"}[$__rate_interval]))",
+          "legendFormat": "{{scenario}}"
+        }
+      ],
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 8, "pointSize": 4, "showPoints": "never" }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "browse_dashboard" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#3987e5" } }, { "id": "displayName", "value": "Dashboard browsing" }] },
+          { "matcher": { "id": "byName", "options": "agent_login" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#d95926" } }, { "id": "displayName", "value": "Agent logins" }] },
+          { "matcher": { "id": "byName", "options": "registry_api" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#199e70" } }, { "id": "displayName", "value": "Registry API" }] },
+          { "matcher": { "id": "byName", "options": "mcp_tool_call" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#c98500" } }, { "id": "displayName", "value": "MCP tool calls" }] }
+        ]
+      }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Response time percentiles",
+      "description": "p50 = typical experience, p95 = slow experience, p99 = worst experience.",
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 5 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROM}" },
+      "targets": [
+        { "refId": "A", "expr": "max(k6_http_req_duration_p50{testid=~\"$testid\"})", "legendFormat": "p50" },
+        { "refId": "B", "expr": "max(k6_http_req_duration_p95{testid=~\"$testid\"})", "legendFormat": "p95" },
+        { "refId": "C", "expr": "max(k6_http_req_duration_p99{testid=~\"$testid\"})", "legendFormat": "p99" }
+      ],
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 0, "pointSize": 4, "showPoints": "never" }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "p50" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#3987e5" } }] },
+          { "matcher": { "id": "byName", "options": "p95" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#d95926" } }] },
+          { "matcher": { "id": "byName", "options": "p99" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#199e70" } }] }
+        ]
+      }
+    },
+    {
+      "id": 20,
+      "type": "stat",
+      "title": "Dashboard load · p95",
+      "gridPos": { "h": 6, "w": 4, "x": 0, "y": 14 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROM}" },
+      "targets": [
+        { "refId": "A", "expr": "max(k6_http_req_duration_p95{scenario=\"browse_dashboard\",testid=~\"$testid\"})" }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 2,
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "#EAB839", "value": 0.5 }, { "color": "red", "value": 1 } ] }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 21,
+      "type": "stat",
+      "title": "Agent login · p95",
+      "gridPos": { "h": 6, "w": 4, "x": 4, "y": 14 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROM}" },
+      "targets": [
+        { "refId": "A", "expr": "max(k6_http_req_duration_p95{scenario=\"agent_login\",testid=~\"$testid\"})" }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 2,
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "#EAB839", "value": 0.75 }, { "color": "red", "value": 1.5 } ] }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 22,
+      "type": "stat",
+      "title": "Registry API · p95",
+      "gridPos": { "h": 6, "w": 4, "x": 8, "y": 14 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROM}" },
+      "targets": [
+        { "refId": "A", "expr": "max(k6_http_req_duration_p95{scenario=\"registry_api\",testid=~\"$testid\"})" }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 2,
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "#EAB839", "value": 0.5 }, { "color": "red", "value": 1 } ] }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 23,
+      "type": "stat",
+      "title": "MCP tool call · p95",
+      "gridPos": { "h": 6, "w": 4, "x": 12, "y": 14 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROM}" },
+      "targets": [
+        { "refId": "A", "expr": "max(k6_http_req_duration_p95{scenario=\"mcp_tool_call\",testid=~\"$testid\"})" }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 2,
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "#EAB839", "value": 0.75 }, { "color": "red", "value": 1.5 } ] }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 24,
+      "type": "timeseries",
+      "title": "Failures per second by journey",
+      "description": "Where errors are coming from when they happen.",
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 14 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROM}" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (scenario) (rate(k6_http_reqs_total{expected_response=\"false\",testid=~\"$testid\"}[$__rate_interval]))",
+          "legendFormat": "{{scenario}}"
+        }
+      ],
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 12, "pointSize": 4, "showPoints": "never" }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "browse_dashboard" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#3987e5" } }, { "id": "displayName", "value": "Dashboard browsing" }] },
+          { "matcher": { "id": "byName", "options": "agent_login" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#d95926" } }, { "id": "displayName", "value": "Agent logins" }] },
+          { "matcher": { "id": "byName", "options": "registry_api" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#199e70" } }, { "id": "displayName", "value": "Registry API" }] },
+          { "matcher": { "id": "byName", "options": "mcp_tool_call" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#c98500" } }, { "id": "displayName", "value": "MCP tool calls" }] }
+        ]
+      }
+    }
+  ]
+}
