@@ -93,6 +93,7 @@ let
     # and the dashboard aggregate them as a single test.
     SHARDS=${toString (k6ShardsFor profile)}
     SHARD_DIR="$(mktemp -d -t mcpgw-k6-shards.XXXXXX)"
+    SHARD_PIDS=()
     for i in $(seq 1 "$SHARDS"); do
       (
         docker run --rm -i --network "$NET" \
@@ -108,8 +109,14 @@ let
           < ${k6Script} > "$SHARD_DIR/shard-$i.log" 2>&1
         echo $? > "$SHARD_DIR/shard-$i.rc"
       ) &
+      SHARD_PIDS+=("$!")
     done
-    wait
+    # Wait for the shard subshells only — a bare `wait` would also block on
+    # the stats-sampler loop forever. Subshells always exit 0 (the k6 exit
+    # code lands in the .rc file), so set -e is safe here.
+    for pid in "''${SHARD_PIDS[@]}"; do
+      wait "$pid"
+    done
 
     FAILED_SHARDS=0
     for i in $(seq 1 "$SHARDS"); do
