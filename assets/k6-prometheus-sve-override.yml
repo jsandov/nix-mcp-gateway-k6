@@ -1,0 +1,33 @@
+# mcpgw-k6 + mcpgw-sve: local compose override, installed by the mcpgw-k6-*
+# commands on hosts where nix-mcp-gateway's mcpgw-up detected an SVE-trapping
+# guest (Apple M4/M5 under vz). Superset of both flakes' overrides:
+#
+# - Prometheus gains --web.enable-remote-write-receiver so k6 can stream its
+#   metrics in. Compose `command` lists replace (not merge), so the upstream
+#   flags are repeated verbatim from docker-compose.prebuilt.yml.
+# - The SVE mitigation env vars from nix-mcp-gateway are preserved: the guest
+#   advertises SVE that the macOS hypervisor traps, so runtime CPU-feature
+#   probing is pinned off for the JVM (Keycloak) and OpenSSL
+#   (pyca/cryptography in registry/auth-server/mcpgw-server).
+services:
+  prometheus:
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+      - '--web.enable-remote-write-receiver'
+  keycloak:
+    environment:
+      - JAVA_OPTS_APPEND=-XX:UseSVE=0
+  registry:
+    environment:
+      - OPENSSL_armcap=0
+  auth-server:
+    environment:
+      - OPENSSL_armcap=0
+  mcpgw-server:
+    environment:
+      - OPENSSL_armcap=0
