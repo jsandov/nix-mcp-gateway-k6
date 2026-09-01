@@ -18,6 +18,10 @@ let
   k6Script = "${self}/assets/k6-gateway.js";
   k6Dashboard = "${self}/assets/exec-load-dashboard.json";
   k6PromOverride = "${self}/assets/k6-prometheus-override.yml";
+  # Superset override for hosts where nix-mcp-gateway's mcpgw-up installed
+  # its SVE mitigation (Apple M4/M5 under vz): Prometheus remote-write PLUS
+  # the mcpgw-sve env vars, so layering k6 in never drops them.
+  k6PromSveOverride = "${self}/assets/k6-prometheus-sve-override.yml";
   k6Image = "grafana/k6:1.4.0";
 
   mkScript = name: text: pkgs.writeShellApplication {
@@ -52,13 +56,23 @@ let
         | grep -q '"web.enable-remote-write-receiver": *"true"'
     }
     if ! rw_enabled; then
-      if [ -f docker-compose.override.yml ] && ! grep -q 'mcpgw-k6' docker-compose.override.yml; then
+      # Files carrying an mcpgw marker are ours to manage (mcpgw-k6: this
+      # flake; mcpgw-sve: nix-mcp-gateway's SVE mitigation) — anything else
+      # is user-authored and must not be clobbered.
+      if [ -f docker-compose.override.yml ] && ! grep -qE 'mcpgw-(k6|sve)' docker-compose.override.yml; then
         echo "A docker-compose.override.yml exists that mcpgw-k6 didn't create." >&2
         echo "Add '--web.enable-remote-write-receiver' to its prometheus command, then re-run." >&2
         exit 1
       fi
       echo "==> Enabling Prometheus remote-write receiver (one-time stack tweak)"
-      install -m 644 ${k6PromOverride} docker-compose.override.yml
+      # Preserve nix-mcp-gateway's SVE mitigation if mcpgw-up installed it:
+      # both flakes manage this file, so pick the superset asset whenever
+      # the existing override carries the mcpgw-sve marker.
+      if [ -f docker-compose.override.yml ] && grep -q 'mcpgw-sve' docker-compose.override.yml; then
+        install -m 644 ${k6PromSveOverride} docker-compose.override.yml
+      else
+        install -m 644 ${k6PromOverride} docker-compose.override.yml
+      fi
       docker compose -f docker-compose.prebuilt.yml -f docker-compose.override.yml up -d prometheus
       for _ in $(seq 1 30); do
         rw_enabled && break
